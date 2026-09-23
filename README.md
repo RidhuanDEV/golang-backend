@@ -2,6 +2,8 @@
 
 Starter backend Go dengan PostgreSQL terpisah dari template Express. Kontrak HTTP berada di registry `internal/httpapi/registry.go`, sedangkan rencana dan kriteria penerimaan ada di [IMPLEMENTATION-PLAN.md](IMPLEMENTATION-PLAN.md).
 
+Snapshot method, path, status, akses, serta policy dari registry Express ada di `contracts/express-endpoints.json` dan dibandingkan dengan registry Go pada setiap `go test`. Perbarui fixture hanya setelah perubahan kontrak pada kedua template disepakati.
+
 ## Mulai manual
 
 Perlu Go 1.27.1 dan PostgreSQL 18. Salin `.env.example` menjadi `.env`, lalu ganti `JWT_SECRET`, kredensial database, dan password bootstrap. Buat database kosong yang cocok dengan `DATABASE_URL`.
