@@ -70,8 +70,8 @@ jobs:
       - run: cp .env.example .env
       - run: docker compose up --build -d app
       - run: curl --fail --retry 30 --retry-delay 2 --retry-connrefused http://127.0.0.1:3101/ready
-      - run: docker compose --profile redis --profile minio up -d redis minio minio-init
-      - run: docker compose --profile redis --profile minio wait minio-init
+      - run: docker compose --profile redis --profile minio up -d redis minio
+      - run: docker compose --profile redis --profile minio run --rm minio-init
       - run: |
           sed -i 's/^CACHE_ENABLED=false$/CACHE_ENABLED=true/' .env
           sed -i 's/^RATE_LIMIT_STORE=memory$/RATE_LIMIT_STORE=redis/' .env
