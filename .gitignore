@@ -1,0 +1,8 @@
+.env
+.env.*
+!.env.example
+uploads/
+bin/
+coverage.out
+*.test
+.tmp-postgres-test/
