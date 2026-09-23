@@ -79,7 +79,7 @@ jobs:
           docker compose --profile redis --profile minio up -d --force-recreate app
           docker compose --profile redis --profile minio run --rm --entrypoint seed app
           curl --fail --retry 30 --retry-delay 2 --retry-connrefused http://127.0.0.1:3101/ready
-          token=$(curl --fail --silent --show-error -H 'Content-Type: application/json' -d '{"email":"admin@example.com","password":"change_this_admin_password"}' http://127.0.0.1:3101/api/auth/login | jq -r '.data.token')
+          token=$(curl --fail --silent --show-error -H 'Content-Type: application/json' -d '{"email":"admin@example.com","password":"replace_this_password"}' http://127.0.0.1:3101/api/auth/login | jq -r '.data.token')
           test -n "$token"
           printf '\211PNG\r\n\032\n' > /tmp/sample.png
           curl --fail --silent --show-error -H "Authorization: Bearer $token" -F file=@/tmp/sample.png http://127.0.0.1:3101/api/upload | jq -e '.data.mimeType == "image/png"'
