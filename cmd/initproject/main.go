@@ -181,7 +181,7 @@ func findRoot() (string, error) {
 	}
 }
 func copyTemplate(source, destination, module string) error {
-	allowed := map[string]struct{}{".github": {}, "cmd": {}, "internal": {}, ".dockerignore": {}, ".env.example": {}, ".gitignore": {}, "Dockerfile": {}, "compose.yaml": {}, "compose.override.yaml.example": {}, "go.mod": {}, "go.sum": {}, "IMPLEMENTATION-PLAN.md": {}, "README.md": {}, "sqlc.yaml": {}}
+	allowed := map[string]struct{}{".github": {}, "cmd": {}, "contracts": {}, "internal": {}, ".dockerignore": {}, ".env.example": {}, ".gitignore": {}, "Dockerfile": {}, "compose.yaml": {}, "compose.override.yaml.example": {}, "go.mod": {}, "go.sum": {}, "IMPLEMENTATION-PLAN.md": {}, "README.md": {}, "sqlc.yaml": {}}
 	allowed["scripts"] = struct{}{}
 	allowed["Makefile"] = struct{}{}
 	return filepath.WalkDir(source, func(path string, entry os.DirEntry, walkErr error) error {
