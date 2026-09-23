@@ -255,6 +255,7 @@ func (s *Server) mount() {
 		}
 		key := uuid.NewString()
 		if err = s.Storage.Put(ctx, key, io.LimitReader(source, s.Config.UploadMaxBytes+1)); err != nil {
+			s.Logger.Error("upload storage write failed", "storage", s.Config.UploadStorage, "error", err)
 			return zero, internal()
 		}
 		file, err := s.Service.CreateFile(ctx, s.Policies["upload.create"], actor, s.Config.UploadStorage, key, header.Filename, mime, header.Size)
