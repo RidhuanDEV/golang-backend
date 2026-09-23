@@ -70,5 +70,18 @@ jobs:
       - run: cp .env.example .env
       - run: docker compose up --build -d app
       - run: curl --fail --retry 30 --retry-delay 2 --retry-connrefused http://127.0.0.1:3101/ready
+      - run: docker compose --profile redis --profile minio up -d redis minio minio-init
+      - run: docker compose --profile redis --profile minio wait minio-init
+      - run: |
+          sed -i 's/^CACHE_ENABLED=false$/CACHE_ENABLED=true/' .env
+          sed -i 's/^RATE_LIMIT_STORE=memory$/RATE_LIMIT_STORE=redis/' .env
+          sed -i 's/^UPLOAD_STORAGE=local$/UPLOAD_STORAGE=s3/' .env
+          docker compose --profile redis --profile minio up -d --force-recreate app
+          docker compose --profile redis --profile minio run --rm --entrypoint seed app
+          curl --fail --retry 30 --retry-delay 2 --retry-connrefused http://127.0.0.1:3101/ready
+          token=$(curl --fail --silent --show-error -H 'Content-Type: application/json' -d '{"email":"admin@example.com","password":"change_this_admin_password"}' http://127.0.0.1:3101/api/auth/login | jq -r '.data.token')
+          test -n "$token"
+          printf '\211PNG\r\n\032\n' > /tmp/sample.png
+          curl --fail --silent --show-error -H "Authorization: Bearer $token" -F file=@/tmp/sample.png http://127.0.0.1:3101/api/upload | jq -e '.data.mimeType == "image/png"'
       - if: always()
-        run: docker compose down --volumes --remove-orphans
+        run: docker compose --profile redis --profile minio down --volumes --remove-orphans
