@@ -254,7 +254,7 @@ func (s *Server) mount() {
 			return zero, internal()
 		}
 		key := uuid.NewString()
-		if err = s.Storage.Put(ctx, key, io.LimitReader(source, s.Config.UploadMaxBytes+1)); err != nil {
+		if err = s.Storage.Put(ctx, key, io.NewSectionReader(source, 0, header.Size)); err != nil {
 			s.Logger.Error("upload storage write failed", "storage", s.Config.UploadStorage, "error", err)
 			return zero, internal()
 		}
