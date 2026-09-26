@@ -4,7 +4,7 @@ Panduan ini memakai alur dan nama package yang benar-benar digunakan project. Co
 
 ## 1. Tambahkan migration Goose
 
-Buat file berurutan berikutnya di `internal/db/migrations`, misalnya `00002_invoices.sql`. Tambahkan bagian `-- +goose Up` dan `-- +goose Down`. Gunakan constraint, foreign key, index, dan `timestamptz` sesuai kebutuhan. Migration ter-embed oleh `internal/db`; jalankan `go run ./cmd/migrate` pada database lokal/disposable untuk menerapkannya.
+Buat file berurutan berikutnya di `internal/db/migrations`, misalnya `00004_invoices.sql`. Nomor harus unik; jangan gunakan kembali versi yang sudah ada. Tambahkan bagian `-- +goose Up` dan `-- +goose Down`. Gunakan constraint, foreign key, index, dan `timestamptz` sesuai kebutuhan. Migration ter-embed oleh `internal/db`; jalankan `go run ./cmd/migrate` pada database lokal/disposable untuk menerapkannya.
 
 Jangan edit migration yang telah dipakai bersama oleh deployment. Buat migration baru dengan strategi expand/contract agar versi aplikasi lama dan baru dapat berjalan selama rollout.
 
