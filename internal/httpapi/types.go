@@ -3,12 +3,11 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
-	"regexp"
-	"strings"
-	"time"
 
+	"github.com/RidhuanDEV/golang-backend/internal/fault"
+	"github.com/RidhuanDEV/golang-backend/internal/model"
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
 )
 
@@ -23,92 +22,50 @@ type Failure struct {
 	Message string   `json:"message"`
 	Errors  []string `json:"errors"`
 }
-type Pagination struct {
-	Page        int  `json:"page"`
-	Limit       int  `json:"limit"`
-	TotalItems  int  `json:"totalItems"`
-	TotalPages  int  `json:"totalPages"`
-	HasNextPage bool `json:"hasNextPage"`
-	HasPrevPage bool `json:"hasPrevPage"`
-}
-type User struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	RoleID    string    `json:"roleId"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
-	Role      *UserRole `json:"role,omitempty"`
-}
-type AuthUser struct {
-	ID        string     `json:"id"`
-	Email     string     `json:"email"`
-	RoleID    string     `json:"roleId"`
-	DeletedAt *time.Time `json:"deletedAt"`
-	CreatedAt time.Time  `json:"createdAt"`
-	UpdatedAt time.Time  `json:"updatedAt"`
-}
-type UserRole struct {
-	ID          string            `json:"id"`
-	Name        string            `json:"name"`
-	Permissions []NamedPermission `json:"permissions"`
-}
-type NamedPermission struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-type Role struct {
-	ID          string           `json:"id"`
-	Name        string           `json:"name"`
-	CreatedAt   time.Time        `json:"createdAt"`
-	UpdatedAt   time.Time        `json:"updatedAt"`
-	Permissions []RolePermission `json:"permissions"`
-}
-type RolePermission struct {
-	Permission NamedPermission `json:"permission"`
-}
-type Permission struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
-}
-type StoredFile struct {
-	ID           string    `json:"id"`
-	OriginalName string    `json:"originalName"`
-	MIMEType     string    `json:"mimeType"`
-	Size         int64     `json:"size"`
-	CreatedAt    time.Time `json:"createdAt"`
-}
-type Token struct {
-	Token string `json:"token"`
-}
-type Status struct {
-	Status string `json:"status"`
-}
-type NameBody struct {
-	Name string `json:"name" minLength:"1" maxLength:"128"`
-}
-type Credentials struct {
-	Email    string `json:"email" format:"email"`
-	Password string `json:"password" minLength:"1"`
-}
-type CreateUserBody struct {
-	Email    string `json:"email" format:"email"`
-	Password string `json:"password" minLength:"6"`
-	RoleID   string `json:"roleId" format:"uuid"`
-}
-type UpdateUserBody struct {
-	Email  *string `json:"email,omitempty" format:"email"`
-	RoleID *string `json:"roleId,omitempty" format:"uuid"`
-}
-type PermissionAssignment struct {
-	PermissionIDs []string `json:"permissionIds" minItems:"1"`
-}
+type Pagination = model.Pagination
+type User = model.User
+type AuthUser = model.AuthUser
+type UserRole = model.UserRole
+type NamedPermission = model.NamedPermission
+type Role = model.Role
+type RolePermission = model.RolePermission
+type Permission = model.Permission
+type StoredFile = model.StoredFile
+type Token = model.Token
+type Status = model.Status
+type NameBody = model.NameBody
+type Credentials = model.Credentials
+type CreateUserBody = model.CreateUserBody
+type UpdateUserBody = model.UpdateUserBody
+type PermissionAssignment = model.PermissionAssignment
 type IDInput struct {
 	ID string `path:"id" format:"uuid"`
 }
 type NamedInput struct{ Body NameBody }
 type CredentialsInput struct{ Body Credentials }
+type RegisterInput struct {
+	Body struct {
+		Email    string `json:"email" format:"email"`
+		Password string `json:"password" minLength:"6" maxLength:"72"`
+	}
+}
+type RoleInput struct {
+	Body struct {
+		Name string `json:"name" minLength:"1" maxLength:"64"`
+	}
+}
+type UpdateRoleInput struct {
+	ID   string `path:"id" format:"uuid"`
+	Body struct {
+		Name *string `json:"name,omitempty" minLength:"1" maxLength:"64"`
+	}
+}
+type UpdatePermissionInput struct {
+	ID   string `path:"id" format:"uuid"`
+	Body struct {
+		Name *string `json:"name,omitempty" minLength:"1" maxLength:"128"`
+	}
+}
 type UserInput struct{ Body CreateUserBody }
 type UpdateUserInput struct {
 	ID   string `path:"id" format:"uuid"`
@@ -123,21 +80,43 @@ type AssignmentInput struct {
 	Body PermissionAssignment
 }
 type UserListInput struct {
-	Page    int    `query:"page" default:"1"`
-	Limit   int    `query:"limit" default:"10"`
+	Page    int    `query:"page" default:"1" minimum:"1"`
+	Limit   int    `query:"limit" default:"10" minimum:"1" maximum:"100"`
 	SortBy  string `query:"sortBy"`
-	OrderBy string `query:"orderBy"`
+	OrderBy string `query:"orderBy" enum:"asc,desc"`
 	Search  string `query:"search"`
 	Fields  string `query:"fields"`
 }
 type UploadInput struct {
-	RawBody []byte `contentType:"multipart/form-data"`
+	RawBody huma.MultipartFormFiles[UploadForm]
 }
 
 type APIError struct {
-	Status  int
-	Message string
-	Errors  []string
+	Success bool     `json:"success"`
+	Status  int      `json:"-"`
+	Message string   `json:"message"`
+	Errors  []string `json:"errors"`
+}
+
+func (e *APIError) GetStatus() int { return e.Status }
+func apiError(err error) *APIError {
+	var api *APIError
+	if errors.As(err, &api) {
+		if api.Errors == nil {
+			api.Errors = []string{}
+		}
+		return api
+	}
+	var business *fault.Error
+	if errors.As(err, &business) {
+		statuses := map[fault.Kind]int{fault.Invalid: 400, fault.Missing: 404, fault.Duplicate: 409, fault.Unauthorized: 401, fault.Forbidden: 403, fault.Internal: 500, fault.TooLarge: 413, fault.Unavailable: 503}
+		status := statuses[business.Kind]
+		if status == 0 {
+			status = 500
+		}
+		return &APIError{Status: status, Message: business.Message, Errors: []string{}}
+	}
+	return &APIError{Status: 500, Message: "Internal server error", Errors: []string{}}
 }
 
 func (e *APIError) Error() string { return e.Message }
@@ -159,13 +138,7 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 	_ = json.NewEncoder(w).Encode(data)
 }
 func writeError(w http.ResponseWriter, err error) {
-	var apiErr *APIError
-	if !errors.As(err, &apiErr) {
-		apiErr = &APIError{Status: 500, Message: "Internal server error"}
-	}
-	if apiErr.Errors == nil {
-		apiErr.Errors = []string{}
-	}
+	apiErr := apiError(err)
 	writeJSON(w, apiErr.Status, Failure{false, apiErr.Message, apiErr.Errors})
 }
 func ok[T any](data T) Success[T] { return Success[T]{Success: true, Data: data} }
@@ -176,17 +149,9 @@ func validUUID(v string) error {
 	return nil
 }
 
-var emailRE = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
-
-func validEmail(v string) error {
-	if !emailRE.MatchString(v) || len(v) > 320 {
-		return badRequest("Invalid email address")
-	}
-	return nil
+type UploadForm struct {
+	File huma.FormFile `form:"file" required:"true"`
 }
-func validName(v string, max int) error {
-	if strings.TrimSpace(v) == "" || len(v) > max {
-		return badRequest(fmt.Sprintf("name must contain 1-%d characters", max))
-	}
-	return nil
+type ModuleInput struct {
+	Module string `path:"module" minLength:"1"`
 }

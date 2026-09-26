@@ -20,7 +20,7 @@ func testConfig() config.Config {
 
 func TestRegistryAndOpenAPI(t *testing.T) {
 	c := testConfig()
-	server, err := NewServer(c, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	server, err := newTestServer(c, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestRegistryAndOpenAPI(t *testing.T) {
 
 func TestLiveCORS(t *testing.T) {
 	c := testConfig()
-	server, err := NewServer(c, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	server, err := newTestServer(c, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func TestRedisRateFailureClosesAuthAndOpensPublic(t *testing.T) {
 	c.RateStore = "redis"
 	client := redis.NewClient(&redis.Options{Addr: "127.0.0.1:1", DialTimeout: 10 * time.Millisecond, MaxRetries: 0})
 	defer client.Close()
-	server, err := NewServer(c, nil, client, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	server, err := newTestServer(c, nil, client, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}

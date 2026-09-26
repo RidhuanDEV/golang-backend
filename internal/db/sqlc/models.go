@@ -9,11 +9,11 @@ import (
 )
 
 type ActivityLog struct {
-	ID              pgtype.UUID        `json:"id"`
+	ID              string             `json:"id"`
 	Behavior        string             `json:"behavior"`
 	Module          string             `json:"module"`
 	EntityID        pgtype.Text        `json:"entity_id"`
-	UserID          pgtype.UUID        `json:"user_id"`
+	UserID          *string            `json:"user_id"`
 	ActorIDSnapshot pgtype.Text        `json:"actor_id_snapshot"`
 	Before          []byte             `json:"before"`
 	After           []byte             `json:"after"`
@@ -23,41 +23,41 @@ type ActivityLog struct {
 }
 
 type Permission struct {
-	ID        pgtype.UUID        `json:"id"`
+	ID        string             `json:"id"`
 	Name      string             `json:"name"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Role struct {
-	ID        pgtype.UUID        `json:"id"`
+	ID        string             `json:"id"`
 	Name      string             `json:"name"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
 type RolePermission struct {
-	RoleID       pgtype.UUID `json:"role_id"`
-	PermissionID pgtype.UUID `json:"permission_id"`
+	RoleID       string `json:"role_id"`
+	PermissionID string `json:"permission_id"`
 }
 
 type StoredFile struct {
-	ID           pgtype.UUID        `json:"id"`
+	ID           string             `json:"id"`
 	Storage      string             `json:"storage"`
 	Status       string             `json:"status"`
 	ObjectKey    string             `json:"object_key"`
 	OriginalName string             `json:"original_name"`
 	MimeType     string             `json:"mime_type"`
 	Size         int64              `json:"size"`
-	UploaderID   pgtype.UUID        `json:"uploader_id"`
+	UploaderID   *string            `json:"uploader_id"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
 type User struct {
-	ID        pgtype.UUID        `json:"id"`
+	ID        string             `json:"id"`
 	Email     string             `json:"email"`
 	Password  string             `json:"password"`
-	RoleID    pgtype.UUID        `json:"role_id"`
+	RoleID    string             `json:"role_id"`
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`

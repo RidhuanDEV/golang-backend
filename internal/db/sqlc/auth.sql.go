@@ -7,8 +7,6 @@ package sqlc
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const findActiveUserByEmail = `-- name: FindActiveUserByEmail :one
@@ -36,7 +34,7 @@ SELECT id, email, password, role_id, deleted_at, created_at, updated_at
 FROM users WHERE id = $1 AND deleted_at IS NULL
 `
 
-func (q *Queries) FindActiveUserByID(ctx context.Context, id pgtype.UUID) (User, error) {
+func (q *Queries) FindActiveUserByID(ctx context.Context, id string) (User, error) {
 	row := q.db.QueryRow(ctx, findActiveUserByID, id)
 	var i User
 	err := row.Scan(
@@ -61,8 +59,8 @@ SELECT EXISTS (
 `
 
 type UserHasPermissionParams struct {
-	ID   pgtype.UUID `json:"id"`
-	Name string      `json:"name"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 func (q *Queries) UserHasPermission(ctx context.Context, arg UserHasPermissionParams) (bool, error) {

@@ -42,8 +42,7 @@ jobs:
       - run: go run ./cmd/migrate
       - run: go run ./cmd/seed
       - run: go run ./cmd/migrate
-      - run: go run ./cmd/initproject --no-install ../smoke-api < scripts/initproject-smoke-input.txt
-      - run: cd ../smoke-api && go test ./...
+      - run: sh scripts/verify-linux-initializer.sh
       - run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
       - run: govulncheck ./...
       - run: docker build -t modular-golang:ci .
@@ -68,10 +67,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: cp .env.example .env
+      - run: sh scripts/verify-migration-gate.sh
       - run: docker compose up --build -d app
       - run: curl --fail --retry 30 --retry-delay 2 --retry-connrefused http://127.0.0.1:3101/ready
-      - run: docker compose --profile redis --profile minio up -d redis minio
-      - run: docker compose --profile redis --profile minio run --rm minio-init
+      - run: docker compose --profile redis --profile minio up --build -d redis minio
+      - run: docker compose --profile redis --profile minio run --build --rm minio-init
       - run: |
           sed -i 's/^CACHE_ENABLED=false$/CACHE_ENABLED=true/' .env
           sed -i 's/^RATE_LIMIT_STORE=memory$/RATE_LIMIT_STORE=redis/' .env

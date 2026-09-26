@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/RidhuanDEV/golang-backend/internal/audit"
 	"github.com/RidhuanDEV/golang-backend/internal/db"
 	"github.com/RidhuanDEV/golang-backend/internal/storage"
 	"github.com/redis/go-redis/v9"
@@ -65,7 +66,7 @@ func TestPostgresContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err := NewServer(c, pool, nil, fileStore, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	server, err := newTestServer(c, pool, nil, fileStore, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +74,7 @@ func TestPostgresContract(t *testing.T) {
 	cacheOnly.CacheEnabled = true
 	unreachable := redis.NewClient(&redis.Options{Addr: "127.0.0.1:1", DialTimeout: 10 * time.Millisecond, MaxRetries: 0})
 	defer unreachable.Close()
-	cacheServer, err := NewServer(cacheOnly, pool, unreachable, fileStore, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	cacheServer, err := newTestServer(cacheOnly, pool, unreachable, fileStore, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +180,7 @@ func TestPostgresContract(t *testing.T) {
 	}
 	requiredLogin := server.Policies["auth.login"]
 	requiredLogin.Audit = AuditRequired
-	requiredToken, loginError := server.Service.Login(ctx, requiredLogin, Credentials{Email: "contract-admin@example.test", Password: "test_password_123"})
+	requiredToken, loginError := server.Auth.Login(ctx, audit.Policy{ID: string(requiredLogin.ID), Module: requiredLogin.Module, Mode: audit.Required}, Credentials{Email: "contract-admin@example.test", Password: "test_password_123"})
 	if loginError == nil || requiredToken.Token != "" {
 		t.Fatal("required login audit failed but token was returned")
 	}

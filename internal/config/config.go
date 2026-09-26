@@ -24,6 +24,8 @@ type Config struct {
 	Port                   int
 	DatabaseURL            string
 	JWTSecret              string
+	JWTIssuer              string
+	JWTAudience            string
 	CORSOrigins            map[string]struct{}
 	RedisURL               string
 	CacheEnabled           bool
@@ -73,6 +75,8 @@ func Load() (Config, error) {
 		Port:              3000,
 		DatabaseURL:       os.Getenv("DATABASE_URL"),
 		JWTSecret:         os.Getenv("JWT_SECRET"),
+		JWTIssuer:         os.Getenv("JWT_ISSUER"),
+		JWTAudience:       os.Getenv("JWT_AUDIENCE"),
 		CORSOrigins:       map[string]struct{}{},
 		RedisURL:          os.Getenv("REDIS_URL"),
 		RateStore:         getenv("RATE_LIMIT_STORE", "memory"),

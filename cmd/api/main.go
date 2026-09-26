@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/RidhuanDEV/golang-backend/internal/app"
 	"github.com/RidhuanDEV/golang-backend/internal/config"
 	"github.com/RidhuanDEV/golang-backend/internal/db"
 	"github.com/RidhuanDEV/golang-backend/internal/httpapi"
@@ -80,7 +81,7 @@ func run() error {
 			return err
 		}
 	}
-	server, err := httpapi.NewServer(c, pool, redisClient, fileStore, logger)
+	server, err := httpapi.NewServer(c, pool, redisClient, app.New(c, pool, fileStore, logger), logger)
 	if err != nil {
 		return err
 	}
@@ -89,18 +90,34 @@ func run() error {
 		handler = otelhttp.NewHandler(handler, "http.server")
 	}
 	httpServer := &http.Server{Addr: fmt.Sprintf(":%d", c.Port), Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
-	go func() {
-		<-ctx.Done()
-		shutdownCtx, stop := context.WithTimeout(context.Background(), 10*time.Second)
-		defer stop()
-		if err := httpServer.Shutdown(shutdownCtx); err != nil {
-			logger.Error("shutdown failed", "error", err)
-		}
-	}()
 	logger.Info("HTTP server listening", "port", c.Port)
-	err = httpServer.ListenAndServe()
-	if errors.Is(err, http.ErrServerClosed) {
+	return serve(ctx, httpServer, httpServer.ListenAndServe)
+}
+
+// Wait for active requests before run closes the database and storage dependencies.
+func serve(ctx context.Context, server *http.Server, listen func() error) error {
+	finished := make(chan error, 1)
+	go func() { finished <- listen() }()
+	select {
+	case err := <-finished:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		err := server.Shutdown(shutdownCtx)
+		if err != nil {
+			_ = server.Close()
+		}
+		listenErr := <-finished
+		if err != nil {
+			return fmt.Errorf("HTTP shutdown: %w", err)
+		}
+		if !errors.Is(listenErr, http.ErrServerClosed) {
+			return listenErr
+		}
 		return nil
 	}
-	return err
 }

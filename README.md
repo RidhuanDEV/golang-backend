@@ -4,6 +4,14 @@ Starter backend Go dengan PostgreSQL terpisah dari template Express. Kontrak HTT
 
 Snapshot method, path, status, akses, serta policy dari registry Express ada di `contracts/express-endpoints.json` dan dibandingkan dengan registry Go pada setiap `go test`. Perbarui fixture hanya setelah perubahan kontrak pada kedua template disepakati.
 
+## Arsitektur
+
+`cmd/api` dan `internal/app` merangkai dependency eksplisit. Package `auth`, `user`, `role`, `permission`, `upload`, dan `audit` berisi use case tanpa dependency transport; `httpapi` menangani DTO, Huma runtime, policy middleware, response dan mapping error. Seluruh query aplikasi statis berada di `internal/db/queries` dan menghasilkan kode sqlc; perubahan query wajib diregenerasi.
+
+Handler Huma yang sama melayani request dan menghasilkan OpenAPI. `contracts/express-schemas.json` berasal dari registry/DTO Zod Express dan menguji bentuk, tipe serta nullability response CRUD, tanpa membandingkan nilai token/UUID/timestamp acak. Regex JavaScript pada snapshot tidak dijalankan sebagai regex Go; validasi input memiliki pengujian eksplisit. Perbedaan keamanan yang disengaja: input tidak dikenal ditolak, password bcrypt dibatasi 72 byte, dan kegagalan database bukan dianggap kredensial salah.
+
+Audit required berada dalam transaksi mutasi; optional tidak membatalkan commit. Upload membersihkan object ketika transaksi metadata gagal. Lihat [runbook operasi](docs/OPERATIONS.md) dan [laporan implementasi](docs/GO-ARCHITECTURE-IMPLEMENTATION-REPORT.md).
+
 ## Mulai manual
 
 Perlu Go 1.27.1 dan PostgreSQL 18. Salin `.env.example` menjadi `.env`, lalu ganti `JWT_SECRET`, kredensial database, dan password bootstrap. Buat database kosong yang cocok dengan `DATABASE_URL`.
@@ -16,7 +24,13 @@ go run ./cmd/api
 
 Seed adalah langkah eksplisit. Aplikasi tidak menjalankan migrasi atau seed saat startup. Endpoint `/live` membuktikan HTTP hidup; `/ready` memeriksa database dan Redis bila dipakai untuk rate limit. Dokumentasi otomatis tersedia di `/docs` dan `/docs/openapi.json`.
 
+Viewer `/docs` memakai Redoc 2.5.4 dari CDN; OpenAPI JSON tetap tersedia tanpa akses CDN. Schema dan request validation berasal dari handler Huma yang sama.
+
 Validasi lokal tanpa layanan eksternal: `go test ./...`, `go vet ./...`, atau `pwsh -File scripts/verify-template.ps1`. Tes PostgreSQL dan Redis otomatis berjalan bila `DATABASE_URL` atau `REDIS_URL` disediakan. Ubah query SQL di `internal/db/queries` dan jalankan `make sqlc` untuk memperbarui kode query bertipe.
+
+Gunakan database/Redis pengujian yang disposable untuk integration test. Tes upgrade membuat database terisolasi dan memerlukan akun PostgreSQL dengan `CREATEDB`; data fixture dan fault injection tidak boleh dijalankan pada database production.
+
+Di Linux, export `DATABASE_URL` dan `REDIS_URL` pengujian lalu jalankan `GOMAXPROCS=2 GOMEMLIMIT=512MiB GOFLAGS=-p=1 sh scripts/verify-linux-initializer.sh`. Script membuat proyek sementara, menjalankan tests/build/migrasi, serta memeriksa startup HTTP dari binary hasil initializer. Docker build backend dan fixture MinIO juga membatasi compile dan memakai cache BuildKit; batas ini berlaku saat build.
 
 ## Mulai lewat Compose
 
@@ -27,7 +41,7 @@ docker compose run --rm --entrypoint seed app
 
 Service `migrate` selesai sebelum `app` dimulai. Redis dan MinIO tersedia dengan `--profile redis` dan `--profile minio`; initializer mengisi `COMPOSE_PROFILES` sesuai pilihan. Service `minio-init` membuat bucket development. Untuk S3 production, buat bucket melalui proses provisioning infrastruktur. Port host bisa diubah lewat `APP_PORT` atau file `compose.override.yaml` yang disalin dari contoh. Untuk deployment replica di luar Compose, jalankan `migrate` sebagai job rilis tunggal sebelum menjalankan image `api` baru.
 
-Profile MinIO dimaksudkan untuk pengembangan lokal. Untuk production, arahkan adapter S3 ke layanan object storage yang aktif dipelihara; [repositori MinIO community telah diarsipkan](https://github.com/minio/minio).
+Profile MinIO dimaksudkan untuk pengembangan lokal. Image fixture dibuat dari commit release resmi MinIO dan mc melalui `scripts/minio.Dockerfile`, sehingga build pertama lebih lama. Untuk production, arahkan adapter S3 ke layanan object storage yang aktif dipelihara; [repositori MinIO community telah diarsipkan](https://github.com/minio/minio).
 
 ## Konfigurasi
 
@@ -37,6 +51,7 @@ Profile MinIO dimaksudkan untuk pengembangan lokal. Untuk production, arahkan ad
 - `UPLOAD_STORAGE=local|s3`; file lokal masuk `UPLOAD_LOCAL_DIR`. Jalankan `go run ./cmd/cleanup-uploads` untuk melihat orphan dan tambah `--apply` untuk menghapusnya.
 - Semua instant dikirim sebagai UTC ISO 8601; gunakan zona IANA seperti `Asia/Jakarta` di sisi penyajian pengguna. Database menyimpan `timestamptz`.
 - Production mewajibkan `CORS_ORIGINS` eksplisit. Permintaan tanpa Origin tetap bisa diproses.
+- `JWT_ISSUER` dan `JWT_AUDIENCE` opsional. Jika diisi, token yang diterima harus mempunyai claims yang cocok; perubahan ini memerlukan login ulang untuk token lama.
 - `OTEL_ENABLED=true` mengirim trace dan metrik HTTP melalui OTLP HTTP ke `OTEL_EXPORTER_OTLP_ENDPOINT`; set `OTEL_SERVICE_NAME` untuk identitas aplikasi.
 
 Untuk backup, gunakan `pg_dump` terhadap database Go dan simpan objek upload secara terpisah. Lakukan uji restore ke staging sebelum rilis production.

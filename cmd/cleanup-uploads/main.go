@@ -11,6 +11,7 @@ import (
 
 	"github.com/RidhuanDEV/golang-backend/internal/config"
 	"github.com/RidhuanDEV/golang-backend/internal/db"
+	"github.com/RidhuanDEV/golang-backend/internal/db/sqlc"
 	"github.com/RidhuanDEV/golang-backend/internal/storage"
 	"github.com/joho/godotenv"
 )
@@ -72,8 +73,8 @@ func run() error {
 		}
 	}
 	for _, key := range keys {
-		var exists bool
-		if err = pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM stored_files WHERE object_key=$1 AND storage=$2)`, key, c.UploadStorage).Scan(&exists); err != nil {
+		exists, queryErr := sqlc.New(pool).FileReferenced(ctx, sqlc.FileReferencedParams{ObjectKey: key, Storage: c.UploadStorage})
+		if err = queryErr; err != nil {
 			return err
 		}
 		if exists {

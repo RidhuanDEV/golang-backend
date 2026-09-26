@@ -32,7 +32,7 @@ func TestExpressEndpointParity(t *testing.T) {
 	for _, endpoint := range Definitions {
 		goEndpoints[endpoint.ID] = endpoint
 	}
-	server, err := NewServer(testConfig(), nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	server, err := newTestServer(testConfig(), nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}

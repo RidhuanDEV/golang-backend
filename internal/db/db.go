@@ -3,9 +3,9 @@ package db
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/RidhuanDEV/golang-backend/internal/db/migrations"
 	"github.com/jackc/pgx/v5"
@@ -70,17 +70,13 @@ func InTx(ctx context.Context, pool *pgxpool.Pool, fn func(pgx.Tx) error) error 
 	if err != nil {
 		return err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		_ = tx.Rollback(cleanup)
+	}()
 	if err = fn(tx); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
 }
-
-func IsUniqueViolation(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "SQLSTATE 23505")
-}
-func IsForeignKeyViolation(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "SQLSTATE 23503")
-}
-func IsNotFound(err error) bool { return errors.Is(err, pgx.ErrNoRows) }

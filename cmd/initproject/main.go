@@ -184,6 +184,7 @@ func copyTemplate(source, destination, module string) error {
 	allowed := map[string]struct{}{".github": {}, "cmd": {}, "contracts": {}, "internal": {}, ".dockerignore": {}, ".env.example": {}, ".gitignore": {}, "Dockerfile": {}, "compose.yaml": {}, "compose.override.yaml.example": {}, "go.mod": {}, "go.sum": {}, "IMPLEMENTATION-PLAN.md": {}, "README.md": {}, "sqlc.yaml": {}}
 	allowed["scripts"] = struct{}{}
 	allowed["Makefile"] = struct{}{}
+	allowed["docs"] = struct{}{}
 	return filepath.WalkDir(source, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -203,6 +204,9 @@ func copyTemplate(source, destination, module string) error {
 			return nil
 		}
 		name := entry.Name()
+		if rootPart == "docs" && !entry.IsDir() && name != "OPERATIONS.md" && name != "GO-ARCHITECTURE-REFINEMENT-PLAN.md" && name != "GO-ARCHITECTURE-IMPLEMENTATION-REPORT.md" {
+			return nil
+		}
 		if entry.IsDir() && (name == ".git" || name == "uploads" || name == "bin") {
 			return filepath.SkipDir
 		}

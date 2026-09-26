@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/RidhuanDEV/golang-backend/internal/db"
+	"github.com/RidhuanDEV/golang-backend/internal/db/sqlc"
 	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -25,17 +26,18 @@ func main() {
 		log.Fatal(err)
 	}
 	defer pool.Close()
+	q := sqlc.New(pool)
 	for _, name := range []string{"admin", "user"} {
-		if _, err = pool.Exec(ctx, `INSERT INTO roles(name) VALUES($1) ON CONFLICT(name) DO NOTHING`, name); err != nil {
+		if err = q.SeedRole(ctx, name); err != nil {
 			log.Fatal(err)
 		}
 	}
 	for _, name := range []string{"manage_users", "manage_roles", "manage_permissions"} {
-		if _, err = pool.Exec(ctx, `INSERT INTO permissions(name) VALUES($1) ON CONFLICT(name) DO NOTHING`, name); err != nil {
+		if err = q.SeedPermission(ctx, name); err != nil {
 			log.Fatal(err)
 		}
 	}
-	_, err = pool.Exec(ctx, `INSERT INTO role_permissions(role_id,permission_id) SELECT r.id,p.id FROM roles r CROSS JOIN permissions p WHERE r.name='admin' ON CONFLICT DO NOTHING`)
+	err = q.SeedAdminPermissions(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -50,7 +52,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		_, err = pool.Exec(ctx, `INSERT INTO users(email,password,role_id) SELECT lower($1),$2,id FROM roles WHERE name=$3 ON CONFLICT(email) DO UPDATE SET role_id=EXCLUDED.role_id,deleted_at=NULL,updated_at=now()`, strings.TrimSpace(entry.email), string(hash), entry.role)
+		err = q.SeedUser(ctx, sqlc.SeedUserParams{Lower: strings.TrimSpace(entry.email), Password: string(hash), Name: entry.role})
 		if err != nil {
 			log.Fatal(err)
 		}
