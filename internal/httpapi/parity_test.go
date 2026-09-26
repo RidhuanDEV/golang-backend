@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// The fixture is a snapshot of the Express registry, independent of the Go registry.
+// The fixture is the Express snapshot plus explicitly listed Go-only extensions.
 // Row order: ID, method, path, module, public, permission, audit, rate, cache, status.
 func TestExpressEndpointParity(t *testing.T) {
 	content, err := os.ReadFile("../../contracts/express-endpoints.json")
@@ -25,8 +25,19 @@ func TestExpressEndpointParity(t *testing.T) {
 	if err = json.Unmarshal(content, &fixture); err != nil {
 		t.Fatal(err)
 	}
-	if fixture.Source == "" || len(fixture.Endpoints) != len(Definitions) {
-		t.Fatalf("Express fixture has %d endpoints; Go has %d", len(fixture.Endpoints), len(Definitions))
+	var extension struct {
+		Source    string              `json:"source"`
+		Endpoints [][]json.RawMessage `json:"endpoints"`
+	}
+	local, err := os.ReadFile("../../contracts/go-endpoint-extensions.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal(local, &extension); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.Source == "" || extension.Source == "" || len(fixture.Endpoints)+len(extension.Endpoints) != len(Definitions) {
+		t.Fatalf("Express fixture plus Go extensions has %d endpoints; Go has %d", len(fixture.Endpoints)+len(extension.Endpoints), len(Definitions))
 	}
 	goEndpoints := make(map[EndpointID]Endpoint, len(Definitions))
 	for _, endpoint := range Definitions {
@@ -50,7 +61,7 @@ func TestExpressEndpointParity(t *testing.T) {
 	if err = json.Unmarshal(response.Body.Bytes(), &spec); err != nil {
 		t.Fatal(err)
 	}
-	for _, row := range fixture.Endpoints {
+	for _, row := range append(fixture.Endpoints, extension.Endpoints...) {
 		if len(row) != 10 {
 			t.Fatalf("invalid Express contract row with %d columns", len(row))
 		}

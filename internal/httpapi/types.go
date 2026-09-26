@@ -24,14 +24,14 @@ type Failure struct {
 }
 type Pagination = model.Pagination
 type User = model.User
-type AuthUser = model.AuthUser
+type AuthUser = AuthUserResponse
 type UserRole = model.UserRole
 type NamedPermission = model.NamedPermission
 type Role = model.Role
 type RolePermission = model.RolePermission
 type Permission = model.Permission
 type StoredFile = model.StoredFile
-type Token = model.Token
+type Token = TokenResponse
 type Status = model.Status
 type NameBody = model.NameBody
 type Credentials = model.Credentials
@@ -43,6 +43,11 @@ type IDInput struct {
 }
 type NamedInput struct{ Body NameBody }
 type CredentialsInput struct{ Body Credentials }
+type RefreshInput struct {
+	Body struct {
+		RefreshToken string `json:"refreshToken" minLength:"1"`
+	}
+}
 type RegisterInput struct {
 	Body struct {
 		Email    string `json:"email" format:"email"`

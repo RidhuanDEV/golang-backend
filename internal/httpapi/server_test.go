@@ -24,8 +24,8 @@ func TestRegistryAndOpenAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(server.registered); got != 27 {
-		t.Fatalf("mounted %d endpoints, want 27", got)
+	if got := len(server.registered); got != 28 {
+		t.Fatalf("mounted %d endpoints, want 28", got)
 	}
 	req := httptest.NewRequest(http.MethodGet, "/docs/openapi.json", nil)
 	rec := httptest.NewRecorder()
@@ -49,8 +49,8 @@ func TestRegistryAndOpenAPI(t *testing.T) {
 			}
 		}
 	}
-	if count != 27 {
-		t.Fatalf("OpenAPI documented %d operations, want 27", count)
+	if count != 28 {
+		t.Fatalf("OpenAPI documented %d operations, want 28", count)
 	}
 	for _, ep := range Definitions {
 		if ep.ID == "ready.get" {
@@ -64,7 +64,7 @@ func TestRegistryAndOpenAPI(t *testing.T) {
 		expected := 401
 		if ep.Public {
 			expected = ep.Status
-			if ep.ID == "auth.register" || ep.ID == "auth.login" {
+			if ep.ID == "auth.register" || ep.ID == "auth.login" || ep.ID == "auth.refresh" {
 				expected = 400
 			}
 		}

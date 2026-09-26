@@ -1,9 +1,46 @@
 package httpapi
 
 import (
+	"github.com/RidhuanDEV/golang-backend/internal/model"
 	"strings"
 	"time"
 )
+
+type UserResponse struct {
+	ID        string    `json:"id"`
+	Email     string    `json:"email" format:"email"`
+	RoleID    string    `json:"roleId" format:"uuid"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	Role      *UserRole `json:"role,omitempty"`
+}
+
+type AuthUserResponse struct {
+	ID        string    `json:"id" format:"uuid"`
+	Email     string    `json:"email" format:"email"`
+	RoleID    string    `json:"roleId" format:"uuid"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+type TokenResponse struct {
+	Token        string `json:"token" doc:"15-minute JWT access token"`
+	RefreshToken string `json:"refreshToken" doc:"Single-use opaque refresh token"`
+	TokenType    string `json:"tokenType" example:"Bearer"`
+	ExpiresIn    int64  `json:"expiresIn" example:"900" doc:"Access token lifetime in seconds"`
+}
+
+func publicUser(value model.User) UserResponse {
+	return UserResponse{ID: value.ID, Email: value.Email, RoleID: value.RoleID, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt, Role: value.Role}
+}
+
+func publicAuthUser(value model.AuthUser) AuthUserResponse {
+	return AuthUserResponse{ID: value.ID, Email: value.Email, RoleID: value.RoleID, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt}
+}
+
+func tokenResponse(value model.TokenPair) TokenResponse {
+	return TokenResponse{Token: value.AccessToken, RefreshToken: value.RefreshToken, TokenType: "Bearer", ExpiresIn: value.AccessTokenExpiresIn}
+}
 
 type UserProjection struct {
 	ID        *string    `json:"id,omitempty"`

@@ -22,6 +22,16 @@ type ActivityLog struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
+type AuthRefreshToken struct {
+	ID        string             `json:"id"`
+	FamilyID  string             `json:"family_id"`
+	UserID    string             `json:"user_id"`
+	TokenHash []byte             `json:"token_hash"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	RevokedAt pgtype.Timestamptz `json:"revoked_at"`
+}
+
 type Permission struct {
 	ID        string             `json:"id"`
 	Name      string             `json:"name"`

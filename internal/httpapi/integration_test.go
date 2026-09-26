@@ -181,7 +181,7 @@ func TestPostgresContract(t *testing.T) {
 	requiredLogin := server.Policies["auth.login"]
 	requiredLogin.Audit = AuditRequired
 	requiredToken, loginError := server.Auth.Login(ctx, audit.Policy{ID: string(requiredLogin.ID), Module: requiredLogin.Module, Mode: audit.Required}, Credentials{Email: "contract-admin@example.test", Password: "test_password_123"})
-	if loginError == nil || requiredToken.Token != "" {
+	if loginError == nil || requiredToken.AccessToken != "" {
 		t.Fatal("required login audit failed but token was returned")
 	}
 	if err = db.Migrate(url); err != nil {

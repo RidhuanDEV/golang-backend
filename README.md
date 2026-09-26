@@ -1,20 +1,145 @@
 # Modular Go Backend
 
-Starter backend Go dengan PostgreSQL terpisah dari template Express. Kontrak HTTP berada di registry `internal/httpapi/registry.go`, sedangkan rencana dan kriteria penerimaan ada di [IMPLEMENTATION-PLAN.md](IMPLEMENTATION-PLAN.md).
+[![CI](https://github.com/RidhuanDEV/golang-backend/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/RidhuanDEV/golang-backend/actions/workflows/ci.yml)
 
-Snapshot method, path, status, akses, serta policy dari registry Express ada di `contracts/express-endpoints.json` dan dibandingkan dengan registry Go pada setiap `go test`. Perbarui fixture hanya setelah perubahan kontrak pada kedua template disepakati.
+Starter **modular monolith** untuk membangun HTTP API dengan Go, PostgreSQL, Chi, Huma, dan sqlc. Cocok untuk tim yang ingin memulai dari auth, RBAC, audit, upload lokal/S3, rate limiting, cache Redis opsional, OpenAPI, dan container setup yang sudah terhubung.
+
+Proyek ini ditujukan untuk satu aplikasi yang dikembangkan dan dirilis sebagai satu unit dengan batas package per fitur. Pilih layanan terpisah bila fitur perlu dirilis, diskalakan, atau dimiliki secara independen. Database aplikasi ini milik proyek Go dan tidak berbagi schema dengan starter Express atau stack lain.
+
+Perlu Go 1.27.1 untuk initializer dan mode manual. Compose memerlukan Docker Engine/Desktop serta Docker Compose v2. Mode manual memerlukan PostgreSQL 18; Redis hanya diperlukan bila cache atau rate store Redis diaktifkan.
+
+## Fitur
+
+- Register/login JWT, RBAC berbasis grant terbaru dari PostgreSQL, dan permission terpisah untuk user, role, dan permission.
+- Registry endpoint bertipe untuk auth, akses, audit, rate group, cache, dan OpenAPI.
+- Audit before/after pada transaksi mutasi; upload memverifikasi signature file dan mendukung storage lokal atau S3.
+- Redis opsional untuk rate limit lintas replica dan cache; satu instance dapat menggunakan rate limiter memory.
+- Liveness/readiness, graceful shutdown, OpenTelemetry HTTP, Goose migrations, dan Compose.
+- Template initializer membuat project baru dan secret JWT tanpa menyalin `.env` atau data lokal.
+- API contract yang sejalan dengan keluarga template Express dan .NET, diverifikasi oleh tes parity. Penjelasan dan cara menyesuaikannya ada di [contract parity](docs/contract-parity.md).
+
+## Buat proyek baru
+
+Initializer saat ini dijalankan dari checkout repository; belum dipublikasikan sebagai paket `go run ...@latest` atau `gonew`.
+
+```sh
+git clone https://github.com/RidhuanDEV/golang-backend.git
+cd golang-backend
+go run ./cmd/initproject ../my-api
+cd ../my-api
+```
+
+Wizard meminta module path, port, database, pilihan Redis, dan storage. Ia membuat `.env` baru dengan JWT secret acak. Isi `ADMIN_EMAIL` dan `ADMIN_PASSWORD` di `.env` bila ingin membuat akun admin saat menjalankan seed. Jangan gunakan kredensial contoh di production.
+
+Untuk melewati unduh dependency saat inisialisasi:
+
+```sh
+go run ./cmd/initproject --no-install ../my-api
+```
+
+Tujuan yang sudah berisi file akan ditolak. Initializer tidak menyalin `.git`, `.env`, atau direktori upload dari checkout.
+
+## Quick start dengan Compose
+
+Perlu Docker Engine/Desktop dan Docker Compose v2. Jalankan di folder project hasil initializer:
+
+```sh
+# Initializer membuat .env. Pastikan JWT_SECRET dan kredensial DB terisi.
+# Opsional: tambahkan ADMIN_EMAIL dan ADMIN_PASSWORD sebelum seed.
+docker compose up --build -d
+docker compose run --rm --entrypoint seed app
+```
+
+Compose menjalankan migrasi satu kali sebelum API dimulai. Seed tetap perintah eksplisit. API tersedia di `http://localhost:3000`, OpenAPI JSON di `/docs/openapi.json`, dan viewer di `/docs`.
+
+Untuk mengecek register dan login, jalankan setelah seed. Ganti email dan password dengan milik Anda:
+
+```sh
+curl -sS http://localhost:3000/api/auth/register -H 'Content-Type: application/json' -d '{"email":"dev@example.com","password":"change-this-password"}'
+curl -sS http://localhost:3000/api/auth/login -H 'Content-Type: application/json' -d '{"email":"dev@example.com","password":"change-this-password"}'
+# Salin token dari data.token pada response login.
+curl -sS http://localhost:3000/api/auth/me -H 'Authorization: Bearer <token>'
+# Saat access token kedaluwarsa, rotasi refresh token dan simpan nilai baru dari data.refreshToken.
+curl -sS http://localhost:3000/api/auth/refresh -H 'Content-Type: application/json' -d '{"refreshToken":"<refresh-token>"}'
+```
+
+PowerShell juga dapat memakai `Invoke-RestMethod`:
+
+```powershell
+$body = @{ email = 'dev@example.com'; password = 'change-this-password' } | ConvertTo-Json
+Invoke-RestMethod http://localhost:3000/api/auth/register -Method Post -ContentType 'application/json' -Body $body
+$login = Invoke-RestMethod http://localhost:3000/api/auth/login -Method Post -ContentType 'application/json' -Body $body
+$token = $login.data.token
+Invoke-RestMethod http://localhost:3000/api/auth/me -Headers @{ Authorization = "Bearer $token" }
+```
+
+Untuk mencoba endpoint admin, set `ADMIN_EMAIL` dan `ADMIN_PASSWORD` sebelum seed, login memakai nilai tersebut, lalu panggil `GET /api/users` dengan bearer token. Login mengembalikan access token 15 menit di `data.token` dan refresh token opaque 30 hari di `data.refreshToken`. Kirim refresh token ke `POST /api/auth/refresh` untuk rotasi; token lama hanya dapat dipakai sekali. Endpoint protected menerima `Authorization: Bearer <token>`.
+
+## Cakupan API dan permission
+
+| Area | Endpoint utama | Akses |
+| --- | --- | --- |
+| Auth | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/refresh`, `GET /api/auth/me` | Register/login/refresh publik dan dibatasi rate group `auth`; `me` memerlukan JWT |
+| User | `GET/POST /api/users`, `GET/PATCH/DELETE /api/users/{id}` | `manage_users` |
+| Role | `GET/POST /api/roles`, `GET/PATCH/DELETE /api/roles/{id}`, `POST /api/roles/{id}/permissions` | `manage_roles` |
+| Permission | `GET/POST /api/permissions`, `GET/PATCH/DELETE /api/permissions/{id}` | `manage_permissions` |
+| Upload | `POST /api/upload`, `GET /api/upload/{id}` | `manage_users` saat ini |
+| System/docs | `/health`, `/live`, `/ready`, `/docs`, `/docs/openapi.json`, `/docs/specs/{module}.json` | Publik |
+
+Seed membuat role `admin` dan `user`, serta permission `manage_users`, `manage_roles`, dan `manage_permissions`; semua permission itu diberikan ke role admin. Endpoint register memberi role `user`. DTO auth/user hanya menampilkan ID, email, role, dan timestamp publik; password serta `deletedAt` internal tidak dikirim. Upload belum memiliki permission tersendiri dan endpoint GET upload hanya mengembalikan metadata, bukan bytes atau presigned URL. Pertimbangkan permission khusus dan alur download sebelum mengadopsi upload untuk aplikasi pengguna.
 
 ## Arsitektur
 
-`cmd/api` dan `internal/app` merangkai dependency eksplisit. Package `auth`, `user`, `role`, `permission`, `upload`, dan `audit` berisi use case tanpa dependency transport; `httpapi` menangani DTO, Huma runtime, policy middleware, response dan mapping error. Seluruh query aplikasi statis berada di `internal/db/queries` dan menghasilkan kode sqlc; perubahan query wajib diregenerasi.
+```mermaid
+flowchart LR
+  APP[Composition root<br/>cmd/api + internal/app] --> HTTP[Chi + Huma<br/>internal/httpapi]
+  APP --> USE[Use cases per feature<br/>auth, user, role, permission, upload]
+  HTTP --> USE
+  USE --> SQL[sqlc queries<br/>internal/db/queries]
+  SQL --> PG[(PostgreSQL)]
+  USE --> AUDIT[audit]
+  USE --> STORE[storage interface]
+  STORE --> LOCAL[Local files]
+  STORE --> S3[S3 compatible]
+```
 
-Handler Huma yang sama melayani request dan menghasilkan OpenAPI. `contracts/express-schemas.json` berasal dari registry/DTO Zod Express dan menguji bentuk, tipe serta nullability response CRUD, tanpa membandingkan nilai token/UUID/timestamp acak. Regex JavaScript pada snapshot tidak dijalankan sebagai regex Go; validasi input memiliki pengujian eksplisit. Perbedaan keamanan yang disengaja: input tidak dikenal ditolak, password bcrypt dibatasi 72 byte, dan kegagalan database bukan dianggap kredensial salah.
+`internal/httpapi` owns transport DTOs, Huma operations, registry policy, and error envelopes. Feature services own use cases. `internal/db/queries` is the source for generated sqlc methods under `internal/db/sqlc`; `internal/model` contains response/domain data types. `cmd/api` and `internal/app` wire concrete dependencies. Goose migrations live in `internal/db/migrations` and are embedded by the DB package.
 
-Audit required berada dalam transaksi mutasi; optional tidak membatalkan commit. Upload membersihkan object ketika transaksi metadata gagal. Lihat [runbook operasi](docs/OPERATIONS.md) dan [laporan implementasi](docs/GO-ARCHITECTURE-IMPLEMENTATION-REPORT.md).
+The repository tests endpoint/OpenAPI consistency and API contract parity. They do not currently enforce every package dependency rule with a dedicated architecture checker. Keep feature packages independent of HTTP transport and put new wiring in the composition root.
 
-## Mulai manual
+## Tambah modul
 
-Perlu Go 1.27.1 dan PostgreSQL 18. Salin `.env.example` menjadi `.env`, lalu ganti `JWT_SECRET`, kredensial database, dan password bootstrap. Buat database kosong yang cocok dengan `DATABASE_URL`.
+Ikuti [panduan membuat modul](docs/module-guide.md) untuk langkah lengkap: migration, query sqlc, service, endpoint Huma, registry, permission, audit, dan verifikasi. Perubahan database dibuat oleh migration Goose; jangan mengubah model sqlc generated secara manual.
+
+## Konfigurasi penting
+
+[`.env.example`](.env.example) mencantumkan seluruh opsi. Perubahan environment berlaku setelah proses dimulai ulang atau deployment baru.
+
+| Variable | Default | Kegunaan |
+| --- | --- | --- |
+| `PORT` / `APP_PORT` | `3000` | Port aplikasi di container / port host Compose |
+| `DATABASE_URL` | local PostgreSQL | PostgreSQL milik aplikasi ini |
+| `JWT_SECRET` | placeholder | Wajib, minimal 32 karakter; initializer menghasilkan nilai acak |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | kosong | Opsional; membuat akun admin saat seed |
+| `CORS_ORIGINS` | localhost:5173, localhost:3000 | Origin browser yang diizinkan; production wajib eksplisit |
+| `RATE_LIMIT_STORE` | `memory` | `redis` untuk berbagi quota antar replica |
+| `APP_INSTANCE_COUNT` | `1` | Set jumlah replica; nilai lebih dari satu mewajibkan Redis limiter |
+| `RATE_LIMIT_<AUTH\|PUBLIC\|INTERNAL>_WINDOW_MS` | `900000` | Jendela quota tiap group |
+| `RATE_LIMIT_<AUTH\|PUBLIC\|INTERNAL>_MAX` | `20` / `100` / `300` | Maksimum request per group per jendela |
+| `CACHE_ENABLED` | `false` | Aktifkan cache Redis opsional untuk endpoint yang mendukungnya |
+| `ENDPOINT_POLICIES_JSON` | `{}` | Override audit, rate group, dan cache per endpoint ID |
+| `UPLOAD_ENABLED` | `true` | Aktif/nonaktif upload |
+| `UPLOAD_STORAGE` | `local` | `local` atau `s3`; folder lokal diatur oleh `UPLOAD_LOCAL_DIR` |
+| `REDIS_URL` | localhost | Diperlukan bila rate store atau cache memakai Redis |
+| `OTEL_ENABLED` | `false` | Kirim trace dan metrik HTTP via OTLP HTTP |
+
+Permintaan tanpa header `Origin` tetap dapat diproses untuk klien server-to-server atau CLI. Browser tetap mengikuti allowlist CORS; ini tidak mengizinkan origin browser yang tidak terdaftar. Detail policy, cache outage, rate behavior, proxy, dan storage ada di [konfigurasi operasi](docs/OPERATIONS.md).
+
+Untuk menyalakan dependency opsional lewat Compose, set `COMPOSE_PROFILES=redis`, `minio`, atau `redis,minio` di `.env`. Gunakan MinIO profile untuk development lokal; untuk production pilih layanan S3 yang aktif dipelihara.
+
+## Tanpa Docker
+
+Salin `.env.example` ke `.env`, atur `DATABASE_URL` ke database kosong dan isi secret, lalu:
 
 ```sh
 go run ./cmd/migrate
@@ -22,40 +147,22 @@ go run ./cmd/seed
 go run ./cmd/api
 ```
 
-Seed adalah langkah eksplisit. Aplikasi tidak menjalankan migrasi atau seed saat startup. Endpoint `/live` membuktikan HTTP hidup; `/ready` memeriksa database dan Redis bila dipakai untuk rate limit. Dokumentasi otomatis tersedia di `/docs` dan `/docs/openapi.json`.
+Jalankan di PowerShell dengan perintah Go yang sama; `.env` dimuat oleh aplikasi. Migrasi dan seed tidak berjalan otomatis saat API startup. Lihat [panduan testing](docs/testing.md) untuk integration test dan regenerasi query tanpa `make`.
 
-Viewer `/docs` memakai Redoc 2.5.4 dari CDN; OpenAPI JSON tetap tersedia tanpa akses CDN. Schema dan request validation berasal dari handler Huma yang sama.
+## API docs dan security
 
-Validasi lokal tanpa layanan eksternal: `go test ./...`, `go vet ./...`, atau `pwsh -File scripts/verify-template.ps1`. Tes PostgreSQL dan Redis otomatis berjalan bila `DATABASE_URL` atau `REDIS_URL` disediakan. Ubah query SQL di `internal/db/queries` dan jalankan `make sqlc` untuk memperbarui kode query bertipe.
+Huma menghasilkan OpenAPI dari operasi HTTP yang sama dengan request runtime. `/docs/openapi.json` menyediakan spesifikasi; `/docs` memuat Redoc 2.5.4 dari jsDelivr dengan versi dan SRI integrity hash yang dipin. Bila Content Security Policy diterapkan, izinkan `https://cdn.jsdelivr.net` pada `script-src` dan origin API sendiri pada `connect-src`. Jika dokumentasi tidak boleh publik, batasi path `/docs` pada ingress/reverse proxy; aplikasi belum memiliki env flag untuk menonaktifkannya.
 
-Gunakan database/Redis pengujian yang disposable untuk integration test. Tes upgrade membuat database terisolasi dan memerlukan akun PostgreSQL dengan `CREATEDB`; data fixture dan fault injection tidak boleh dijalankan pada database production.
+Access JWT berlaku 15 menit dan refresh token opaque berlaku sampai 30 hari sejak login. Refresh token hanya disimpan sebagai SHA-256 hash, dirotasi setiap kali dipakai, dan pemakaian ulang token yang telah dicabut membatalkan seluruh keluarga token. Refresh token tidak diperpanjang melewati batas expiry keluarga. Access token lama tanpa claim `tokenUse` ditolak setelah upgrade ini; pengguna perlu login sekali lagi. Belum ada endpoint logout atau revocation manual; sesi dapat dihentikan dengan replay detection, penghapusan akun, atau menunggu expiry. Akun dan permission tetap diperiksa terhadap database pada request terlindungi. Password dibatasi 72 byte karena bcrypt, upload memakai UUID dan memeriksa signature file, credentialed CORS nonaktif, dan forwarded headers tidak dipercaya secara default.
 
-Di Linux, export `DATABASE_URL` dan `REDIS_URL` pengujian lalu jalankan `GOMAXPROCS=2 GOMEMLIMIT=512MiB GOFLAGS=-p=1 sh scripts/verify-linux-initializer.sh`. Script membuat proyek sementara, menjalankan tests/build/migrasi, serta memeriksa startup HTTP dari binary hasil initializer. Docker build backend dan fixture MinIO juga membatasi compile dan memakai cache BuildKit; batas ini berlaku saat build.
+## Testing dan operasional
 
-## Mulai lewat Compose
+`go test ./...` menjalankan unit/contract tests. Tanpa `DATABASE_URL`, integration tests PostgreSQL di-skip; hasil itu tidak membuktikan alur database lulus. Tes Redis juga memerlukan Redis sesuai environment. Gunakan database disposable, bukan database production. Login dan refresh selalu memakai rate group `auth`; limiter memory membagi kuota hanya dalam satu instance. Untuk beberapa replica, atur `APP_INSTANCE_COUNT` sesuai jumlah replica, `RATE_LIMIT_STORE=redis`, `REDIS_URL`, dan Compose profile `redis`. Jika Redis limiter gagal, endpoint auth menolak request dengan 503.
 
-```sh
-docker compose up --build -d
-docker compose run --rm --entrypoint seed app
-```
+- [Testing, generation, dan CI](docs/testing.md)
+- [Runbook deployment, backup, dan restore](docs/OPERATIONS.md)
+- [Contract parity antar template](docs/contract-parity.md)
 
-Service `migrate` selesai sebelum `app` dimulai. Redis dan MinIO tersedia dengan `--profile redis` dan `--profile minio`; initializer mengisi `COMPOSE_PROFILES` sesuai pilihan. Service `minio-init` membuat bucket development. Untuk S3 production, buat bucket melalui proses provisioning infrastruktur. Port host bisa diubah lewat `APP_PORT` atau file `compose.override.yaml` yang disalin dari contoh. Untuk deployment replica di luar Compose, jalankan `migrate` sebagai job rilis tunggal sebelum menjalankan image `api` baru.
+## Lisensi dan kontribusi
 
-Profile MinIO dimaksudkan untuk pengembangan lokal. Image fixture dibuat dari commit release resmi MinIO dan mc melalui `scripts/minio.Dockerfile`, sehingga build pertama lebih lama. Untuk production, arahkan adapter S3 ke layanan object storage yang aktif dipelihara; [repositori MinIO community telah diarsipkan](https://github.com/minio/minio).
-
-## Konfigurasi
-
-- `ENDPOINT_POLICIES_JSON` mengubah `audit`, `rateLimit`, atau `cache` untuk ID endpoint yang diketahui. Contoh: `{"user.get":{"audit":"optional","cache":"off"}}`. Validasi startup menolak ID dan nilai yang tidak dikenal. Perubahan env membutuhkan redeploy.
-- Rate group `auth`, `public`, `internal` memakai `RATE_LIMIT_<GROUP>_WINDOW_MS` dan `RATE_LIMIT_<GROUP>_MAX`. Satu instance bisa memakai memory; lebih dari satu instance memerlukan Redis.
-- `CACHE_ENABLED=false` berarti Redis tidak dipakai untuk cache. Jika hanya cache yang memakai Redis, kegagalannya tidak menggagalkan readiness.
-- `UPLOAD_STORAGE=local|s3`; file lokal masuk `UPLOAD_LOCAL_DIR`. Jalankan `go run ./cmd/cleanup-uploads` untuk melihat orphan dan tambah `--apply` untuk menghapusnya.
-- Semua instant dikirim sebagai UTC ISO 8601; gunakan zona IANA seperti `Asia/Jakarta` di sisi penyajian pengguna. Database menyimpan `timestamptz`.
-- Production mewajibkan `CORS_ORIGINS` eksplisit. Permintaan tanpa Origin tetap bisa diproses.
-- `JWT_ISSUER` dan `JWT_AUDIENCE` opsional. Jika diisi, token yang diterima harus mempunyai claims yang cocok; perubahan ini memerlukan login ulang untuk token lama.
-- `OTEL_ENABLED=true` mengirim trace dan metrik HTTP melalui OTLP HTTP ke `OTEL_EXPORTER_OTLP_ENDPOINT`; set `OTEL_SERVICE_NAME` untuk identitas aplikasi.
-
-Untuk backup, gunakan `pg_dump` terhadap database Go dan simpan objek upload secara terpisah. Lakukan uji restore ke staging sebelum rilis production.
-
-## Buat proyek baru
-
-Jalankan `go run ./cmd/initproject ../my-api` dari checkout template. Wizard meminta module path, port, database, pilihan Redis dan storage. Tambahkan `--no-install` sebelum nama folder untuk melewati `go mod download`. Tujuan yang sudah berisi file ditolak; initializer menyalin source tanpa direktori Git, data upload, atau `.env` asal, lalu membuat `.env` baru dengan JWT secret acak.
+Repository ini belum menyertakan file lisensi. Hak penggunaan ulang belum diberikan secara eksplisit; tentukan dan tambahkan lisensi sebelum mendistribusikan template. Panduan kontribusi ada di [CONTRIBUTING.md](CONTRIBUTING.md); pelaporan kerentanan dijelaskan di [SECURITY.md](SECURITY.md).

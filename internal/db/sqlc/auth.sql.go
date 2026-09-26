@@ -7,7 +7,31 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const createAuthRefreshToken = `-- name: CreateAuthRefreshToken :exec
+INSERT INTO auth_refresh_tokens(family_id, user_id, token_hash, expires_at)
+VALUES ($1, $2, $3, $4)
+`
+
+type CreateAuthRefreshTokenParams struct {
+	FamilyID  string             `json:"family_id"`
+	UserID    string             `json:"user_id"`
+	TokenHash []byte             `json:"token_hash"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+}
+
+func (q *Queries) CreateAuthRefreshToken(ctx context.Context, arg CreateAuthRefreshTokenParams) error {
+	_, err := q.db.Exec(ctx, createAuthRefreshToken,
+		arg.FamilyID,
+		arg.UserID,
+		arg.TokenHash,
+		arg.ExpiresAt,
+	)
+	return err
+}
 
 const findActiveUserByEmail = `-- name: FindActiveUserByEmail :one
 SELECT id, email, password, role_id, deleted_at, created_at, updated_at
@@ -47,6 +71,51 @@ func (q *Queries) FindActiveUserByID(ctx context.Context, id string) (User, erro
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const findAuthRefreshTokenByHash = `-- name: FindAuthRefreshTokenByHash :one
+SELECT id, family_id, user_id, token_hash, expires_at, created_at, revoked_at
+FROM auth_refresh_tokens
+WHERE token_hash = $1
+FOR UPDATE
+`
+
+func (q *Queries) FindAuthRefreshTokenByHash(ctx context.Context, tokenHash []byte) (AuthRefreshToken, error) {
+	row := q.db.QueryRow(ctx, findAuthRefreshTokenByHash, tokenHash)
+	var i AuthRefreshToken
+	err := row.Scan(
+		&i.ID,
+		&i.FamilyID,
+		&i.UserID,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
+const revokeAuthRefreshFamily = `-- name: RevokeAuthRefreshFamily :exec
+UPDATE auth_refresh_tokens SET revoked_at = now()
+WHERE family_id = $1 AND revoked_at IS NULL
+`
+
+func (q *Queries) RevokeAuthRefreshFamily(ctx context.Context, familyID string) error {
+	_, err := q.db.Exec(ctx, revokeAuthRefreshFamily, familyID)
+	return err
+}
+
+const revokeAuthRefreshToken = `-- name: RevokeAuthRefreshToken :execrows
+UPDATE auth_refresh_tokens SET revoked_at = now()
+WHERE id = $1 AND revoked_at IS NULL
+`
+
+func (q *Queries) RevokeAuthRefreshToken(ctx context.Context, id string) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeAuthRefreshToken, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const userHasPermission = `-- name: UserHasPermission :one

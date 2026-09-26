@@ -58,8 +58,11 @@ type StoredFile struct {
 	Size         int64     `json:"size"`
 	CreatedAt    time.Time `json:"createdAt"`
 }
-type Token struct {
-	Token string `json:"token"`
+type TokenPair struct {
+	AccessToken           string
+	RefreshToken          string
+	AccessTokenExpiresIn  int64
+	RefreshTokenExpiresAt time.Time
 }
 type Status struct {
 	Status string `json:"status"`

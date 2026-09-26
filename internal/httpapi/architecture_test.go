@@ -128,7 +128,11 @@ func decodeBody[T any](t *testing.T, r *httptest.ResponseRecorder) T {
 // JS regex validation is tested by explicit runtime invalid-input cases instead.
 func assertExpressShape(t *testing.T, id string, response *httptest.ResponseRecorder) {
 	t.Helper()
-	raw, err := os.ReadFile("../../contracts/express-schemas.json")
+	fixturePath := "../../contracts/express-schemas.json"
+	if id == "auth.register" || id == "auth.login" || id == "auth.refresh" || id == "auth.me" {
+		fixturePath = "../../contracts/go-auth-schemas.json"
+	}
+	raw, err := os.ReadFile(fixturePath)
 	if err != nil {
 		t.Fatal(err)
 	}

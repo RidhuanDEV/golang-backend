@@ -51,6 +51,7 @@ var Definitions = []Endpoint{
 	{"docs.moduleSpec", "GET", "/docs/specs/{module}.json", "docs", "Module specification", "", true, AuditNone, CacheOff, RatePublic, 200},
 	{"auth.register", "POST", "/api/auth/register", "auth", "Register account", "", true, AuditRequired, CacheOff, RateAuth, 201},
 	{"auth.login", "POST", "/api/auth/login", "auth", "Login", "", true, AuditOptional, CacheOff, RateAuth, 200},
+	{"auth.refresh", "POST", "/api/auth/refresh", "auth", "Rotate refresh token", "", true, AuditRequired, CacheOff, RateAuth, 200},
 	{"auth.me", "GET", "/api/auth/me", "auth", "Current user", "", false, AuditNone, CacheOff, RateInternal, 200},
 	{"user.list", "GET", "/api/users", "user", "List users", "manage_users", false, AuditNone, CacheRead, RateInternal, 200},
 	{"user.get", "GET", "/api/users/{id}", "user", "Get user", "manage_users", false, AuditNone, CacheRead, RateInternal, 200},

@@ -26,7 +26,7 @@ func (s *Server) mountSystem() {
 		return ok(Status{Status: "ok"}), nil
 	})
 	raw[Empty](s, "docs.ui", func(context.Context, *Empty) (*rawOutput, error) {
-		return &rawOutput{ContentType: "text/html; charset=utf-8", Body: []byte(`<!doctype html><html><head><title>Go Backend API</title><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><a href="/docs/openapi.json">OpenAPI JSON</a><redoc spec-url="/docs/openapi.json"></redoc><script src="https://cdn.jsdelivr.net/npm/redoc@2.5.4/bundles/redoc.standalone.js"></script></body></html>`)}, nil
+		return &rawOutput{ContentType: "text/html; charset=utf-8", Body: []byte(`<!doctype html><html><head><title>Go Backend API</title><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><a href="/docs/openapi.json">OpenAPI JSON</a><redoc spec-url="/docs/openapi.json"></redoc><script src="https://cdn.jsdelivr.net/npm/redoc@2.5.4/bundles/redoc.standalone.js" integrity="sha384-w447zOpYfw/1Tv/5AK9NfHTlQIqE3RVR6KY62jCyy9zNDgO64cMwGGP1Fj0zJVf5" crossorigin="anonymous"></script></body></html>`)}, nil
 	})
 	raw[Empty](s, "docs.spec", func(context.Context, *Empty) (*rawOutput, error) {
 		data, err := json.Marshal(s.Docs.OpenAPI())
