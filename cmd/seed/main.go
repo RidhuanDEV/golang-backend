@@ -32,7 +32,7 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-	for _, name := range []string{"manage_users", "manage_roles", "manage_permissions"} {
+	for _, name := range []string{"manage_users", "manage_roles", "manage_permissions", "manage_uploads", "manage_notifications"} {
 		if err = q.SeedPermission(ctx, name); err != nil {
 			log.Fatal(err)
 		}
