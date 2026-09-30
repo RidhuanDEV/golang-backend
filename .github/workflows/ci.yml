@@ -68,15 +68,15 @@ jobs:
       - uses: actions/checkout@v4
       - run: cp .env.example .env
       - run: sh scripts/verify-migration-gate.sh
-      - run: docker compose up --build -d app
+      - run: docker compose up --build -d --wait app
       - run: curl --fail --retry 30 --retry-delay 2 --retry-connrefused http://127.0.0.1:3101/ready
-      - run: docker compose --profile redis --profile minio up --build -d redis minio
+      - run: docker compose --profile redis --profile minio up --build -d --wait redis minio
       - run: docker compose --profile redis --profile minio run --build --rm minio-init
       - run: |
           sed -i 's/^CACHE_ENABLED=false$/CACHE_ENABLED=true/' .env
           sed -i 's/^RATE_LIMIT_STORE=memory$/RATE_LIMIT_STORE=redis/' .env
           sed -i 's/^UPLOAD_STORAGE=local$/UPLOAD_STORAGE=s3/' .env
-          docker compose --profile redis --profile minio up -d --force-recreate app
+          docker compose --profile redis --profile minio up -d --wait --force-recreate app
           docker compose --profile redis --profile minio run --rm --entrypoint seed app
           curl --fail --retry 30 --retry-delay 2 --retry-connrefused http://127.0.0.1:3101/ready
           token=$(curl --fail --silent --show-error -H 'Content-Type: application/json' -d '{"email":"admin@example.com","password":"replace_this_password"}' http://127.0.0.1:3101/api/auth/login | jq -r '.data.token')
@@ -86,5 +86,8 @@ jobs:
             docker compose --profile redis --profile minio logs --tail=50 app minio
             exit 1
           fi
+      - name: Diagnose failed Compose startup
+        if: failure()
+        run: docker compose --profile redis --profile minio logs --tail=60 postgres migrate app minio-init
       - if: always()
         run: docker compose --profile redis --profile minio down --volumes --remove-orphans
