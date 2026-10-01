@@ -3,6 +3,31 @@ on:
   push:
   pull_request:
 jobs:
+  mysql:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-mysql-fixture
+          MYSQL_DATABASE: backend
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval 5s --health-timeout 3s --health-retries 30
+    env:
+      MYSQL_TEST_ADMIN_URL: mysql://root:ci-mysql-fixture@127.0.0.1:3306/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go mod download
+      - run: go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
+      - run: git diff --exit-code -- internal/db/mysql/sqlc
+      - run: go test -race ./internal/db -run TestMySQL
+      - run: docker build -t modular-golang-mysql:ci .
   verify:
     runs-on: ubuntu-latest
     services:
