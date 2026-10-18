@@ -10,20 +10,6 @@ import (
 	"database/sql"
 )
 
-const advanceRefreshFamily = `-- name: AdvanceRefreshFamily :exec
-UPDATE refresh_families SET expires_at=? WHERE id=?
-`
-
-type AdvanceRefreshFamilyParams struct {
-	ExpiresAt sql.NullTime `json:"expires_at"`
-	ID        string       `json:"id"`
-}
-
-func (q *Queries) AdvanceRefreshFamily(ctx context.Context, arg AdvanceRefreshFamilyParams) error {
-	_, err := q.db.ExecContext(ctx, advanceRefreshFamily, arg.ExpiresAt, arg.ID)
-	return err
-}
-
 const createAuthRefreshToken = `-- name: CreateAuthRefreshToken :exec
 INSERT INTO auth_refresh_tokens(family_id,user_id,token_hash,expires_at) VALUES(?,?,?,?)
 `
@@ -189,6 +175,24 @@ UPDATE refresh_families SET revoked_at=COALESCE(revoked_at,CURRENT_TIMESTAMP(3))
 
 func (q *Queries) RevokeRefreshFamilyRecord(ctx context.Context, id string) error {
 	_, err := q.db.ExecContext(ctx, revokeRefreshFamilyRecord, id)
+	return err
+}
+
+const revokeUserAuthRefreshTokens = `-- name: RevokeUserAuthRefreshTokens :exec
+UPDATE auth_refresh_tokens SET revoked_at=CURRENT_TIMESTAMP(3) WHERE user_id=? AND revoked_at IS NULL
+`
+
+func (q *Queries) RevokeUserAuthRefreshTokens(ctx context.Context, userID string) error {
+	_, err := q.db.ExecContext(ctx, revokeUserAuthRefreshTokens, userID)
+	return err
+}
+
+const revokeUserRefreshFamilies = `-- name: RevokeUserRefreshFamilies :exec
+UPDATE refresh_families SET revoked_at=CURRENT_TIMESTAMP(3) WHERE user_id=? AND revoked_at IS NULL
+`
+
+func (q *Queries) RevokeUserRefreshFamilies(ctx context.Context, userID string) error {
+	_, err := q.db.ExecContext(ctx, revokeUserRefreshFamilies, userID)
 	return err
 }
 

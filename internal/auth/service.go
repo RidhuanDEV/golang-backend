@@ -22,7 +22,10 @@ import (
 )
 
 const accessTokenTTL = 15 * time.Minute
+
+// Idle timeout per refresh token; the family is an absolute cap that rotation never extends.
 const refreshTokenTTL = 30 * 24 * time.Hour
+const refreshSessionTTL = 90 * 24 * time.Hour
 
 // Unknown emails still pay one bcrypt comparison so response time does not reveal which accounts exist.
 var dummyPasswordHash = sync.OnceValue(func() []byte {
@@ -91,7 +94,8 @@ func (s *Service) Login(ctx context.Context, p audit.Policy, b model.Credentials
 		if err != nil {
 			return model.TokenPair{}, audit.Change{}, err
 		}
-		if err = q.CreateRefreshFamily(ctx, sqlc.CreateRefreshFamilyParams{ID: familyID, UserID: row.ID, ExpiresAt: sql.NullTime{Time: pair.RefreshTokenExpiresAt, Valid: true}}); err != nil {
+		sessionExpires := sql.NullTime{Time: time.Now().UTC().Add(refreshSessionTTL), Valid: true}
+		if err = q.CreateRefreshFamily(ctx, sqlc.CreateRefreshFamilyParams{ID: familyID, UserID: row.ID, ExpiresAt: sessionExpires}); err != nil {
 			return model.TokenPair{}, audit.Change{}, err
 		}
 		err = q.CreateAuthRefreshToken(ctx, sqlc.CreateAuthRefreshTokenParams{FamilyID: familyID, UserID: row.ID, TokenHash: tokenHash, ExpiresAt: sql.NullTime{Time: pair.RefreshTokenExpiresAt, Valid: true}})
@@ -177,6 +181,9 @@ func (s *Service) Refresh(ctx context.Context, p audit.Policy, raw string) (mode
 			}
 		} else {
 			expires := sql.NullTime{Time: now.Add(refreshTokenTTL), Valid: true}
+			if family.ExpiresAt.Valid && family.ExpiresAt.Time.Before(expires.Time) {
+				expires.Time = family.ExpiresAt.Time
+			}
 			after.ExpiresAt = expires.Time
 			var tokenHash []byte
 			pair, tokenHash, _, err = s.issueTokenPair(user.ID, user.Email, user.RoleID, family.ID, expires.Time)
@@ -184,9 +191,6 @@ func (s *Service) Refresh(ctx context.Context, p audit.Policy, raw string) (mode
 				return err
 			}
 			if _, err = q.RevokeAuthRefreshToken(ctx, stored.ID); err != nil {
-				return err
-			}
-			if err = q.AdvanceRefreshFamily(ctx, sqlc.AdvanceRefreshFamilyParams{ID: family.ID, ExpiresAt: expires}); err != nil {
 				return err
 			}
 			if err = q.CreateAuthRefreshToken(ctx, sqlc.CreateAuthRefreshTokenParams{FamilyID: family.ID, UserID: user.ID, TokenHash: tokenHash, ExpiresAt: expires}); err != nil {
@@ -277,8 +281,20 @@ func (s *Service) optionalSessionAudit(ctx context.Context, p audit.Policy, acto
 		s.Audit.Log.Warn("optional session audit failed", "endpoint", p.ID)
 	}
 }
+
+// Authenticate verifies the token and loads the active user.
 func (s *Service) Authenticate(ctx context.Context, raw string) (*Actor, error) {
-	deny := func() (*Actor, error) { return nil, fault.New(fault.Unauthorized, "Unauthorized") }
+	claims, err := s.VerifyAccessToken(raw)
+	if err != nil {
+		return nil, err
+	}
+	return s.LoadActor(ctx, claims)
+}
+
+// VerifyAccessToken checks signature and claims only, with no database access,
+// so the per-user rate limit can run before any query is made for the request.
+func (s *Service) VerifyAccessToken(raw string) (*Claims, error) {
+	deny := func() (*Claims, error) { return nil, fault.New(fault.Unauthorized, "Unauthorized") }
 	if !strings.HasPrefix(raw, "Bearer ") {
 		return deny()
 	}
@@ -294,10 +310,15 @@ func (s *Service) Authenticate(ctx context.Context, raw string) (*Actor, error) 
 	if err != nil || !token.Valid || claims.TokenUse != "access" || fault.UUID(claims.ID) != nil {
 		return deny()
 	}
+	return claims, nil
+}
+
+// LoadActor resolves verified claims to the active user and its current role.
+func (s *Service) LoadActor(ctx context.Context, claims *Claims) (*Actor, error) {
 	row, err := s.Queries.FindActiveUserByID(ctx, claims.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return deny()
+			return nil, fault.New(fault.Unauthorized, "Unauthorized")
 		}
 		return nil, fault.DB(err)
 	}
