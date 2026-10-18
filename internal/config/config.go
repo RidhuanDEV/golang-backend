@@ -23,25 +23,27 @@ type PolicyOverride struct {
 	Cache     string `json:"cache"`
 }
 type Config struct {
-	Operations       Operations
-	Environment      string
-	Port             int
-	DatabaseURL      string
-	DatabaseProvider string
-	JWTSecret        string
-	JWTIssuer        string
-	JWTAudience      string
-	CORSOrigins      map[string]struct{}
-	RedisURL         string
-	RedisNamespace   string
-	CacheEnabled     bool
-	RateStore        string
-	Rates            map[string]Rate
-	InstanceCount    int
-	TrustProxyHops   int
-	Policies         map[string]PolicyOverride
-	UploadEnabled    bool
-	DocsDisabled     bool
+	Operations          Operations
+	Environment         string
+	Port                int
+	DatabaseURL         string
+	DatabaseProvider    string
+	JWTSecret           string
+	JWTIssuer           string
+	JWTAudience         string
+	RefreshIdleDays     int
+	RefreshAbsoluteDays int
+	CORSOrigins         map[string]struct{}
+	RedisURL            string
+	RedisNamespace      string
+	CacheEnabled        bool
+	RateStore           string
+	Rates               map[string]Rate
+	InstanceCount       int
+	TrustProxyHops      int
+	Policies            map[string]PolicyOverride
+	UploadEnabled       bool
+	DocsDisabled        bool
 	// RefreshTransport is body (JSON, default) or cookie (httpOnly refresh cookie).
 	RefreshTransport       string
 	RefreshCookieName      string
@@ -151,6 +153,15 @@ func Load() (Config, error) {
 	}
 	if c.TrustProxyHops, err = integer("TRUST_PROXY_HOPS", 0); err != nil {
 		return c, err
+	}
+	if c.RefreshIdleDays, err = integer("REFRESH_TOKEN_IDLE_DAYS", 30); err != nil {
+		return c, err
+	}
+	if c.RefreshAbsoluteDays, err = integer("REFRESH_TOKEN_ABSOLUTE_DAYS", 90); err != nil {
+		return c, err
+	}
+	if c.RefreshIdleDays < 1 || c.RefreshAbsoluteDays > 3650 || c.RefreshAbsoluteDays < c.RefreshIdleDays {
+		return c, errors.New("REFRESH_TOKEN_IDLE_DAYS and REFRESH_TOKEN_ABSOLUTE_DAYS must be 1-3650 with absolute >= idle")
 	}
 	if c.UploadOrphanGraceHours, err = integer("UPLOAD_ORPHAN_GRACE_HOURS", 24); err != nil {
 		return c, err

@@ -6,7 +6,7 @@ Default host HTTP port: 8080. Native auth response fields: `token`, `refreshToke
 
 ## Auth and audit contracts
 
-Access JWTs expire after 15 minutes. Refresh sessions are idle-limited to 30 days per token and capped at an absolute 90 days from login: each rotated token expires at min(now + 30 days, family expiry), and rotation never extends the family. Deleting a user or changing their role revokes every refresh family of that user. Clients must coordinate one refresh in flight per session. A second simultaneous refresh is replay and revokes the entire family.
+Access JWTs expire after 15 minutes. Refresh sessions have an idle timeout and an absolute lifetime: each successful rotation issues a token valid for `REFRESH_TOKEN_IDLE_DAYS` (default 30) from server UTC, but never past the family expiry, which is fixed at login to `REFRESH_TOKEN_ABSOLUTE_DAYS` (default 90). After that the user must log in again. `REFRESH_TOKEN_ABSOLUTE_DAYS` must be at least `REFRESH_TOKEN_IDLE_DAYS`. Deleting a user or changing their role revokes every refresh family of that user. Clients must coordinate one refresh in flight per session. A second simultaneous refresh is replay and revokes the entire family.
 
 `POST /api/auth/logout` accepts `{ "refreshToken": "opaque-value" }`, returns **204 without a body**, and is idempotent for unknown or already-revoked families. A consumed pre-rotation token also logs out its family. Refresh/replay/logout lock the family before the token. Only hashes are stored. Revoked or expired tokens cannot revive a session. Previously issued JWTs continue until their expiry; this change adds no access-token blacklist.
 
@@ -43,7 +43,7 @@ Without a cursor, unread rows are drained in ascending sequence. A cursor replay
 1. Back up database, migration history and upload objects/metadata. Rehearse restoration in the separate testing task.
 2. Pause old API replicas and old notification writers during migration/backfill. This upgrade requires coordinated rollout: old writers do not create family/counter records and must not remain beside the new schema.
 3. Run the provider's release migrator **once**, then start new HTTP replicas and workers. Compose already waits for a successful migration. Seed remains explicit.
-4. Existing family records are grouped from token history. Preserve existing expiry; all-consumed/revoked families remain revoked. A currently active family becomes sliding only on the next successful rotation. .NET's old absolute-cap column is retained for schema compatibility and no longer caps new rotations.
+4. Existing family records are grouped from token history. Preserve existing expiry; all-consumed/revoked families remain revoked. A currently active family keeps its stored expiry as its absolute cap, so existing sessions end at most 30 days after their last rotation before this change. .NET also records the same absolute expiry in each token's `FamilyExpiresAt` column.
 5. Existing notification sequence is backfilled by created date then ID for Express/NestJS/Go/.NET; existing FastAPI sequence values are preserved. Counter initialization uses the existing maximum only during the quiesced migration, never for live inserts.
 6. Legacy `PENDING` notification rows have no durable email job and become `FAILED`, avoiding an automatic duplicate resend of a historical SMTP attempt. No historical email job is fabricated.
 
