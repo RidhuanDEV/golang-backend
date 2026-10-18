@@ -3,7 +3,7 @@
 A typed backend starter for teams building a new API with **PostgreSQL or MySQL**. It gives you Chi, Huma, sqlc, and Goose, connected authentication and permissions, and explicit database and worker commands so you can start with application features.
 
 [![CI](https://github.com/RidhuanDEV/golang-backend/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/RidhuanDEV/golang-backend/actions/workflows/ci.yml)
-[![Go](https://img.shields.io/badge/Go-1.27.1-blue?style=flat-square)](https://github.com/RidhuanDEV/golang-backend) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169e1?style=flat-square)](.env.example) [![MySQL](https://img.shields.io/badge/MySQL-8.4-4479a1?style=flat-square)](.env.mysql.example) [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+[![Go](https://img.shields.io/badge/Go-1.27.2-blue?style=flat-square)](https://github.com/RidhuanDEV/golang-backend) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169e1?style=flat-square)](.env.example) [![MySQL](https://img.shields.io/badge/MySQL-8.4-4479a1?style=flat-square)](.env.mysql.example) [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 
 **Start here:** [Requirements](#requirements) · [Quick start](#quick-start) · [Docker](#docker-quick-start) · [API docs](#api-documentation) · [Structure](#project-structure) · [Guides](#documentation).
 
@@ -23,7 +23,7 @@ A typed backend starter for teams building a new API with **PostgreSQL or MySQL*
 
 | Run mode | You need |
 | --- | --- |
-| Manual | Go 1.27.1, plus an application-owned database |
+| Manual | Go 1.27.2, plus an application-owned database |
 | Docker | Docker Engine/Desktop using Linux containers and Docker Compose v2; host application SDKs are not required |
 | Optional features | Redis for shared quotas/cache; S3 storage and SMTP only when enabled |
 
